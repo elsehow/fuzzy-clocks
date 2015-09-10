@@ -4,11 +4,13 @@
 
 (enable-console-print!)
 
-(def color-period 28800) ; seconds   28800 == 8 hours
+(def slow-color-period 28800) ; seconds   28800 == 8 hours
 
-(def squares-period 10) ; seconds  
+(def fast-color-period (/ slow-color-period 100)) ; seconds   
 
-(def update-time-interval 100) ; ms
+(def squares-period (/ fast-color-period 10)) ; seconds
+
+(def update-time-interval 25) ; ms
 
 (defn now [] (.now js/Date))
 
@@ -52,61 +54,66 @@
         (round))))
 
 (defn sin-rgb [[r-off r-freq] [g-off g-freq] [b-off b-freq]]
-  "Retruns (fn [x]) where x is 0-2π, (fn [x]) returns a string 'rgb(a,b,c)', where a, b, c are produced by sin functions with given offsets and frequencies."
-    (fn [x]
-      (let [c #((sin-color-fn %1 %2) x)]
-        (rgb-str
-          (c r-off r-freq)
-          (c g-off g-freq)
-          (c b-off b-freq)))))
+  "Returns (fn [x]) where x is 0-2π, (fn [x]) returns a string 'rgb(r,g,b)', where r, g, b are produced by sin functions with given offsets and frequencies."
+  (fn [x]
+    (rgb-str
+      ((sin-color-fn r-off r-freq) x)
+      ((sin-color-fn g-off g-freq) x)
+      ((sin-color-fn b-off b-freq) x))))
 
-(def slow-color
-  (sin-rgb [0 1] [2 2] [1.3 1.3]))
+(def my-sin-color
+  "Returns a function that takes an x and returns a string rgb(r,g,b). r,g,b are sin waves with offsets 0, 2, or 1.3 and frequencies 1, 2 or 1.5."
+  (sin-rgb [0 1] [2 2] [1.3 1.5]))
 
-(def fast-color 
-  (sin-rgb [2 5] [1.5 6] [5 8]))
-
-(defn background [x]
-  "Given an x 0-2π, returns #js {:background: 'rgb:(...)'"
+(defn background [fast-x slow-x]
+  "Given an x 0-2π, returns #js {:background .... }'"
     #js {:background (linear-gradient-str
-                      (slow-color x)
-                      (fast-color x))})
+                      (my-sin-color slow-x)
+                      (my-sin-color fast-x))})
 
 (defn samples-from-period [n]
   "Takes n samples from the period of a sin wave (0-2π)"
-  (let [factor 100
-        sample-range (* factor two-pi)]
+  (let [scale 100
+        sample-range (* scale two-pi)
+        samples (range sample-range)]
     (map 
-     #(/ % factor)
-     (take-nth (/ sample-range n) (range sample-range)))))
+     #(/ % scale)
+     (take-nth (/ sample-range n) samples))))
       
 (defn opacities [num-squares offset]
-  (map
-   #(Math/sin (+ % (mod offset two-pi)))
-   (samples-from-period num-squares)))
+  (->> (samples-from-period num-squares)
+       (map (sin-fn (mod offset two-pi) 1))
+       (reverse)))
 
+(defn square-div [opacity]
+  (dom/span
+    #js {:style #js {:opacity opacity}
+                     ;:WebkitFilter (str "blur(" (- 1 (* 4 opacity)) "pc)")}
+         :id "square"}))
 
-(defn clock [x]
-  "Given an x 0-2π, returns a div with a background defined by x."
+(defn squares [x] 
+  (let [num-squares 9
+        square-opacities (opacities num-squares x)]
+    (dom/div
+      #js {:id "squaresContainer"}
+      (map square-div square-opacities))))
+
+(defn clock [fast-x slow-x squares-x]
+  "Given some x values 0-2π, returns a div of the clock's state."
   (dom/div
     #js {
       :id "clock"
-      :style (background x)}))
+      :style (background fast-x slow-x)}
+    (squares squares-x)))
 
-
-;; TODO
-;; where to draw squares?
-;; what to name those point-in-color-cycle things
-;; and how to make them more DRY
-(println (opacities 10 6.29))
+(defn my-cool-viz [start now]
+  (let [point-in-cycle (fn [period] (cyclic-time start now period))]
+      (clock
+        (point-in-cycle fast-color-period)
+        (point-in-cycle slow-color-period)
+        (point-in-cycle squares-period))))
 
 (defn viz [data owner]
-  (let [point-in-color-cycle #(cyclic-time % 
-                                           (:start-time data)
-                                           color-period)
-        point-in-squares-cycle #(cyclic-time % 
-                                           (:start-time data)
-                                           squares-period)]
     (reify
       ;; mount
       om/IWillMount
@@ -117,7 +124,7 @@
       ;; render 
       om/IRender
       (render [_]
-        (clock (point-in-color-cycle (:now data)))))))
+        (my-cool-viz (:start-time data) (:now data)))))
 
 (defonce app-state 
   (atom {:start-time (now)}))

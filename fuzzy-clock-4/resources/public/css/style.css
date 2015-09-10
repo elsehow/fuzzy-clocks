@@ -1,6 +1,27 @@
 /* some style */
 
+html {
+	margin:-10px;
+}
+
 #clock {
+	padding:10px;
 	width: 100vw;
+	max-width:100%;
 	height: 100vh;
+	overflow: hidden;
+}
+
+#squaresContainer {
+	padding: 31vh 40vw;
+	width: 20vw;
+	height: 40vw;
+}
+
+#square {
+	background-color:#eee;
+	margin: 8%;
+	width: 30px;
+	height: 30px;
+	float: left;
 }
