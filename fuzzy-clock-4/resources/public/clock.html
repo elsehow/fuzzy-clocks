@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">    
+    <style>/* some style */
+
+#clock {
+	width: 100vw;
+	height: 100vh;
+}
+
+#squaresContainer {
+	padding: 35vh 40vw;
+	width: 20vw;
+	height: 40vw;
+}
+
+#square {
+	background-color:#eee;
+	margin: 8%;
+	width: 25px;
+	height: 25px;
+	float: left;
+}</style>
+  </head>
+  <body>
+    <div id="app">
+      <h2>Figwheel template</h2>
+      <p>Checkout your developer console.</p>
+    </div>
+    <script type="text/javascript">var CLOSURE_UNCOMPILED_DEFINES = null;
+if(typeof goog == "undefined") document.write('<script src="js/compiled/out/goog/base.js"></script>');
+document.write('<script src="js/compiled/out/cljs_deps.js"></script>');
+
+document.write("<script>if (typeof goog != \"undefined\") { goog.require(\"figwheel.connect\"); }</script>");
+document.write('<script>if (typeof goog != "undefined") { goog.require("fuzzy_clock_4.core"); } else { console.warn("ClojureScript could not load :main, did you forget to specify :asset-path?"); };</script>');</script>
+  </body>
+</html>

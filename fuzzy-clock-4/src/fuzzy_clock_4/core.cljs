@@ -1,14 +1,16 @@
 (ns ^:figwheel-always fuzzy-clock-4.core
     (:require [om.core :as om :include-macros true]
-              [om.dom :as dom :include-macros true]))
+              [om.dom :as dom :include-macros true]
+              [thi.ng.color.gradients :as gradients]))
 
 (enable-console-print!)
 
-(def slow-color-period 28800) ; seconds   28800 == 8 hours
 
-(def fast-color-period (/ slow-color-period 100)) ; seconds   
+(def slow-period 28800) ; seconds   28800 == 8 hours
 
-(def squares-period (/ fast-color-period 10)) ; seconds
+(def medium-period (/ slow-period 100)) ; seconds   
+
+(def fast-period (/ slow-period 1000)) ; seconds
 
 (def update-time-interval 25) ; ms
 
@@ -24,55 +26,38 @@
 
 (def two-pi (* 2 pi))
 
-(defn rgb-str [r g b]
+(defn rgb-str [[r g b]]
   (str "rgb(" r "," g "," b ")"))
 
 (defn linear-gradient-str [bottom-left top-right]
   (str "linear-gradient(to top right," bottom-left "," top-right ")"))
 
-(defn cyclic-time [t0 t1 period]
-  "Maps t1's modular progress through period (in seconds) onto the period of a sin wave (0-2π)."
-  (let [ms-period (* 1000 period)]
-    (map-range [0 ms-period] 
-               [0 two-pi] 
-               (mod (- t1 t0) ms-period))))
-
 (def map-to-color-range
   "Maps a value 0-1 to a value 0-255"
   (partial map-range [0 1] [0 255]))
+
+(defn my-sin-color [x]
+  ;; see https://github.com/thi-ng/color/blob/master/src/gradients.org
+  (let [color-fn #(gradients/cosine-gradient-color 
+    [0.5 0.5 0.5] [1 1 1] [1.0 1.0 1.0] [0 0.3333 0.6666]
+                    %)]
+  (->> (color-fn x) 
+       (map map-to-color-range)
+       (map round)
+       (rgb-str))))
 
 (defn sin-fn [offset frequency]
   (fn [x] 
     (.sin js/Math (+ (* x frequency) offset))))
 
-(defn sin-color-fn [offset frequency]
-  "Returns a (fn [x]) where x is 0-2π and returns number 0-255."
-  (fn [x]
-    (-> ((sin-fn offset frequency) x)
-        (square)
-        (map-to-color-range)
-        (round))))
-
-(defn sin-rgb [[r-off r-freq] [g-off g-freq] [b-off b-freq]]
-  "Returns (fn [x]) where x is 0-2π, (fn [x]) returns a string 'rgb(r,g,b)', where r, g, b are produced by sin functions with given offsets and frequencies."
-  (fn [x]
-    (rgb-str
-      ((sin-color-fn r-off r-freq) x)
-      ((sin-color-fn g-off g-freq) x)
-      ((sin-color-fn b-off b-freq) x))))
-
-(def my-sin-color
-  "Returns a function that takes an x and returns a string rgb(r,g,b). r,g,b are sin waves with offsets 0, 2, or 1.3 and frequencies 1, 2 or 1.5."
-  (sin-rgb [0 1] [2 2] [1.3 1.5]))
-
 (defn background [fast-x slow-x]
-  "Given an x 0-2π, returns #js {:background .... }'"
-    #js {:background (linear-gradient-str
+  "Given an x 0-1, returns #js {:background .... }'"
+  #js {:background (linear-gradient-str
                       (my-sin-color slow-x)
                       (my-sin-color fast-x))})
 
 (defn samples-from-period [n]
-  "Takes n samples from the period of a sin wave (0-2π)"
+  "Takes n samples from the period of a sin wave (0-1)"
   (let [scale 100
         sample-range (* scale two-pi)
         samples (range sample-range)]
@@ -88,7 +73,7 @@
 (defn square-div [opacity]
   (dom/span
     #js {:style #js {:opacity opacity}
-                     ;:WebkitFilter (str "blur(" (- 1 (* 4 opacity)) "pc)")}
+                     ;:WebkitFilter (str "blur(" (map-range [-1 1] [0 7] opacity) "px)")}
          :id "square"}))
 
 (defn squares [x] 
@@ -98,20 +83,26 @@
       #js {:id "squaresContainer"}
       (map square-div square-opacities))))
 
-(defn clock [fast-x slow-x squares-x]
-  "Given some x values 0-2π, returns a div of the clock's state."
+(defn clock [slow-x medium-x fast-x]
+  "Given some x values 0-1, returns a div of the clock's state."
   (dom/div
     #js {
       :id "clock"
-      :style (background fast-x slow-x)}
-    (squares squares-x)))
+      :style (background medium-x slow-x) }
+    (squares fast-x)))
 
-(defn my-cool-viz [start now]
-  (let [point-in-cycle (fn [period] (cyclic-time start now period))]
-      (clock
-        (point-in-cycle fast-color-period)
-        (point-in-cycle slow-color-period)
-        (point-in-cycle squares-period))))
+(defn x-in-cycle [t period target-range]
+  "Maps t (a unix time)'s progress through period (in seconds) onto target-range, a vector (e.g. [0 1] or [0 two-pi])."
+  (let [ms-per (* 1000 period)]
+    (map-range [0 ms-per] 
+               target-range
+               (mod t ms-per))))
+
+(defn my-cool-viz [t]
+  (clock
+    (x-in-cycle t slow-period [0 1])
+    (x-in-cycle t medium-period [0 1])
+    (x-in-cycle t fast-period [0 two-pi])))
 
 (defn viz [data owner]
     (reify
@@ -124,10 +115,10 @@
       ;; render 
       om/IRender
       (render [_]
-        (my-cool-viz (:start-time data) (:now data)))))
+        (my-cool-viz (:now data)))))
 
 (defonce app-state 
-  (atom {:start-time (now)}))
+  (atom {:now (now)}))
 
 (om/root
   viz
@@ -135,4 +126,3 @@
   {:target (. js/document (getElementById "app"))})
 
 (println "app done+launched!")
-
